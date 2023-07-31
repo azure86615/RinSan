@@ -17,10 +17,12 @@ class MyFrame(wx.Frame):
         self.Centre()   # 把產生出來的視窗放在螢幕正中間
         self.pageIndex = PAGE.Unit      #指示當前所在的頁面
         self.tagsConfPath = ".\\test.conf"
-        self.schedulConfPath = ""
+        self.schedulConfPath = ".\\schedule.conf"
         self.appRootConfPath = ".\\app_root.conf"
         self.applicationExePath = "%windir%\system32\SnippingTool.exe"
         self.existUnitList = self.ReadDataFile_Tags(self.tagsConfPath)
+        self.periodModeIndex = 0
+        self.ReadDataFile_Schedule(self.schedulConfPath)
         self.showPanelColor = True     # 控制 panel 上色(辨識區域用)
         
 
@@ -97,14 +99,13 @@ class MyFrame(wx.Frame):
         # スケジュール時間 頁面==========================================================
         # 參數
         scheduleSelectionList = ["月","周","日","30分","5分"]
-        self.periodModeIndex = 0
         self.monthCase = {}
 
         self.timeCase = {}
         testscheduleList = ["test1, daily, 00:00,+00:30*?, , , , , , , ,","test, monthly, Mon1 09:30, Mon2 09:30, Mon3 09:30, Mon4 09:30, , , , , ,"]
         
 
-        hourList = ["","0","1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","23"]
+        hourList = ["","00","01","02","03","04","05","06","07","08","09","10","11","12","13","14","15","16","17","18","19","20","21","22","23"]
         minuteList = ["00","30"]
         self.scheduleOptionDic = {}
         self.scheduleHourDic = {}
@@ -118,11 +119,10 @@ class MyFrame(wx.Frame):
         selectionPart = wx.BoxSizer(wx.HORIZONTAL)
         for idx, choice in enumerate(scheduleSelectionList):   # 創造週期單選按鈕
             schSelRadio = wx.RadioButton(self.timePanel, label=choice, style=wx.RB_GROUP if idx==0 else 0)   # radiobutton 加上 style = wx.RB_GROUP 表示為一組的開頭
+            if self.periodModeIndex == idx: schSelRadio.SetValue(True)  # 控制模式按鈕預設
             schSelRadio.Bind(wx.EVT_RADIOBUTTON, lambda event, scheduleTypeIndex=idx: self.SelectPeriod(event, scheduleTypeIndex))
             selectionPart.Add(schSelRadio,flag=wx.ALL|wx.EXPAND, border=10)
         timebSizer.Add(selectionPart)
-
-        
 
         timeSettingPart = wx.BoxSizer(wx.HORIZONTAL)
         self.scheduleOptionPanel = wx.Panel(self.timePanel)
@@ -170,6 +170,8 @@ class MyFrame(wx.Frame):
         scheduleCheckBtn = wx.Button(self.timePanel, label="確定")
         scheduleCheckBtn.Bind(wx.EVT_BUTTON, self.CheckSchedule)
         timebSizer.Add(scheduleCheckBtn, flag=wx.ALIGN_CENTER|wx.ALL, border=10)
+
+        self.SelectPeriod(any, self.periodModeIndex)    # 控制預設時間區間模式的頁面項目 (不包含模式按鈕)
 
 
         # パラメータ設定 頁面==========================================================
@@ -278,6 +280,19 @@ class MyFrame(wx.Frame):
             for line in f.readlines():
                 data.append(line.split("\n")[0])
         return data
+
+    def ReadDataFile_Schedule(self, filePath):
+        existContent = ""
+        with open(filePath,"r+") as f:
+            existContent = f.readline()
+        modeTextTailIndex = existContent.find(",",3)
+        modeText = existContent[3:modeTextTailIndex]
+        if modeText == "monthly":
+            self.periodModeIndex = 0
+        elif modeText == "weekly":
+            self.periodModeIndex = 1
+        
+        print("text:",modeText)
     
     # 新規單元頁面按鈕
     def CheckUnit(self, event):
@@ -308,8 +323,11 @@ class MyFrame(wx.Frame):
     
     # 時間表頁面按鈕
     def SelectPeriod(self, event, schIndex):
-        print(event.GetEventObject())
+        #print(event.GetEventObject())
         print(schIndex)
+
+        if self.periodModeIndex != schIndex:
+            self.scheduleOptionDic.clear()
         
         self.periodModeIndex = schIndex
         if schIndex == 0:
@@ -334,16 +352,51 @@ class MyFrame(wx.Frame):
         print()
     
     def CheckSchedule(self, event):
-        print(self.scheduleOptionDic)
+        print("option:",self.scheduleOptionDic, " hour:",self.scheduleHourDic, " min:",self.scheduleMinDic)
+        print("mode:",self.periodModeIndex)
+        writeToFile = ""
+        modeText = ""
+        if self.periodModeIndex == 0:
+            modeText = "monthly"
+        elif self.periodModeIndex == 1:
+            modeText = "weekly"
+        else:
+            modeText = "daily"
+
+        
+        if self.periodModeIndex <=1:
+            for idx in range(4):
+                if idx not in self.scheduleOptionDic.keys() or idx not in self.scheduleHourDic.keys() or  idx not in self.scheduleMinDic.keys():
+                    continue
+                else:
+                    writeToFile += " " + self.scheduleOptionDic[idx] + " " + self.scheduleHourDic[idx] + ":" + self.scheduleMinDic[idx] + "," #開頭空白，結尾逗號
+        else:
+            for idx in range(4):
+                if idx not in self.scheduleHourDic.keys() or  idx not in self.scheduleMinDic.keys():
+                    continue
+                else:
+                    writeToFile += " " + self.scheduleHourDic[idx] + ":" + self.scheduleMinDic[idx] + "," #開頭空白，結尾逗號
+
+        with open(self.schedulConfPath,"w") as f:
+            if writeToFile != "":
+                writeToFile = "*, " + modeText + "," + writeToFile + ",,,,,,,"
+                f.write(writeToFile)
+            wx.MessageBox("schedule.conf データ修正完了しました \n " + self.schedulConfPath)
+        
+        print(writeToFile)
+
     
     def SelectOptionDate_1(self,event, idx):
         print("Day: " + event.GetEventObject().GetValue(), "idx: ",idx)
+        self.scheduleOptionDic[idx] = event.GetEventObject().GetValue()
+        if self.scheduleOptionDic[idx] == "":
+            self.scheduleOptionDic.pop(idx)
     def SelectHour_1(self, event, idx):
-        print("hour: " + event.GetEventObject().GetValue())
-        print("idx: ",idx)
+        print("hour: " + event.GetEventObject().GetValue(),"idx: ",idx)
+        self.scheduleHourDic[idx] = event.GetEventObject().GetValue()
     def SelectMinute_1(self, event, idx):
-        print("Minute: " + event.GetEventObject().GetValue())
-        print("idx:",idx)
+        print("Minute: " + event.GetEventObject().GetValue(),"idx: ",idx)
+        self.scheduleMinDic[idx] = event.GetEventObject().GetValue()
 
      # 設定頁面按鈕
     def SelectPath(self, event):
@@ -386,7 +439,8 @@ class MyFrame(wx.Frame):
     # 實行按鈕功能
     def Execution(self,event):
         #os.popen("ls")
-        os.popen(self.applicationExePath)
+        #os.popen(self.applicationExePath)
+        self.ReadDataFile_Schedule(self.schedulConfPath)
         pass
 
 if __name__ == '__main__':
