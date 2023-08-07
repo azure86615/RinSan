@@ -1,5 +1,7 @@
 import wx
 import os
+import sys
+import re
 
 class PAGE():
     Unit = 0
@@ -20,6 +22,9 @@ class MyFrame(wx.Frame):
         self.schedulConfPath = ".\\schedule.conf"
         self.appRootConfPath = ".\\app_root.conf"
         self.applicationExePath = "%windir%\system32\SnippingTool.exe"
+        self.scheduleOptionDic = {}
+        self.scheduleHourDic = {}
+        self.scheduleMinDic = {}
         self.existUnitList = self.ReadDataFile_Tags(self.tagsConfPath)
         self.periodModeIndex = 0
         self.ReadDataFile_Schedule(self.schedulConfPath)
@@ -32,17 +37,17 @@ class MyFrame(wx.Frame):
         # 而 timePanel 那頁如果也塞在這裡面莫名又會造成顯示出錯(一開始沒顯示出文字，換頁按回來就有)，所以才搞成這麼麻煩的架構
         basicbSizer = wx.BoxSizer(wx.VERTICAL)
         self.panel_main.SetSizer(basicbSizer)
-        self.panel_main.SetBackgroundColour(wx.BLUE) if self.showPanelColor else False
+        self.panel_main.SetBackgroundColour(wx.Colour("BLUE")) if self.showPanelColor else False
 
         # 創建三個子頁面面板
         self.newUnitPanel = wx.Panel(self)
-        self.newUnitPanel.SetBackgroundColour(wx.RED) if self.showPanelColor else False
+        self.newUnitPanel.SetBackgroundColour(wx.Colour("RED")) if self.showPanelColor else False
         #self.newUnitPanel.Hide()
         self.timePanel = wx.Panel(self)
-        self.timePanel.SetBackgroundColour(wx.GREEN) if self.showPanelColor else False
+        self.timePanel.SetBackgroundColour(wx.Colour("GREEN")) if self.showPanelColor else False
         self.timePanel.Hide()
         self.settingPanel = wx.Panel(self)
-        self.settingPanel.SetBackgroundColour(wx.YELLOW) if self.showPanelColor else False
+        self.settingPanel.SetBackgroundColour(wx.Colour("YELLOW")) if self.showPanelColor else False
         self.settingPanel.Hide()
 
         # 頁面按鈕區域==========================================================
@@ -107,9 +112,7 @@ class MyFrame(wx.Frame):
 
         hourList = ["","00","01","02","03","04","05","06","07","08","09","10","11","12","13","14","15","16","17","18","19","20","21","22","23"]
         minuteList = ["00","30"]
-        self.scheduleOptionDic = {}
-        self.scheduleHourDic = {}
-        self.scheduleMinDic = {}
+
         
         
         # 布局
@@ -126,12 +129,14 @@ class MyFrame(wx.Frame):
 
         timeSettingPart = wx.BoxSizer(wx.HORIZONTAL)
         self.scheduleOptionPanel = wx.Panel(self.timePanel)
-        self.scheduleOptionPanel.SetBackgroundColour(wx.YELLOW) if self.showPanelColor else False
-        #self.monthPanel.Hide()
+        self.scheduleOptionPanel.SetBackgroundColour(wx.Colour("YELLOW")) if self.showPanelColor else False
+        self.hourMinutePanel = wx.Panel(self.timePanel)
+        self.hourMinutePanel.SetBackgroundColour(wx.Colour("PLUM")) if self.showPanelColor else False
         self.dayList = ["","1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25","26","27","28","29","30","31"]
         self.weekList = ["","Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
         self.optionModeComboboxList: list[wx.ComboBox] = []
         self.optionModeTextList: list[wx.StaticText] = []
+
 
         optionPart = wx.BoxSizer(wx.VERTICAL)
         self.scheduleOptionPanel.SetSizer(optionPart)
@@ -151,24 +156,25 @@ class MyFrame(wx.Frame):
 
 
         hourMinutePart = wx.BoxSizer(wx.VERTICAL)
+        self.hourMinutePanel.SetSizer(hourMinutePart)
         for timerIndex in range(4):
             timePart = wx.BoxSizer(wx.HORIZONTAL)
-            time1_hour = wx.ComboBox(self.timePanel, choices=hourList, style=wx.CB_READONLY)    #只允許用選的 (避免出錯用)
-            time1_minute = wx.ComboBox(self.timePanel, choices=minuteList, style=wx.CB_READONLY)
+            time1_hour = wx.ComboBox(self.hourMinutePanel, choices=hourList, style=wx.CB_READONLY)    #只允許用選的 (避免出錯用)
+            time1_minute = wx.ComboBox(self.hourMinutePanel, choices=minuteList, style=wx.CB_READONLY)
             time1_hour.Bind(wx.EVT_COMBOBOX, lambda event, idx=timerIndex: self.SelectHour_1(event, idx))
             time1_minute.Bind(wx.EVT_COMBOBOX, lambda event, idx=timerIndex: self.SelectMinute_1(event, idx))
             timePart.Add(time1_hour, flag=wx.ALL, border=5)
-            timePart.Add(wx.StaticText(self.timePanel, label="時"), flag=wx.ALL, border=10)
+            timePart.Add(wx.StaticText(self.hourMinutePanel, label="時"), flag=wx.ALL, border=10)
             timePart.Add(time1_minute, flag=wx.ALL, border=5)
-            timePart.Add(wx.StaticText(self.timePanel, label="分"), flag=wx.ALL, border=10)
+            timePart.Add(wx.StaticText(self.hourMinutePanel, label="分"), flag=wx.ALL, border=10)
             hourMinutePart.Add(timePart)
 
-        timeSettingPart.Add(hourMinutePart)
+        timeSettingPart.Add(self.hourMinutePanel)
         timebSizer.Add(timeSettingPart)
 
 
         scheduleCheckBtn = wx.Button(self.timePanel, label="確定")
-        scheduleCheckBtn.Bind(wx.EVT_BUTTON, self.CheckSchedule)
+        scheduleCheckBtn.Bind(wx.EVT_BUTTON, self.CheckAndWriteSchedule)
         timebSizer.Add(scheduleCheckBtn, flag=wx.ALIGN_CENTER|wx.ALL, border=10)
 
         self.SelectPeriod(any, self.periodModeIndex)    # 控制預設時間區間模式的頁面項目 (不包含模式按鈕)
@@ -285,14 +291,32 @@ class MyFrame(wx.Frame):
         existContent = ""
         with open(filePath,"r+") as f:
             existContent = f.readline()
-        modeTextTailIndex = existContent.find(",",3)
+        modeTextTailIndex = existContent.find(",",3)    # 忽略最前面的 "*, ", 從 index 3 開始往後找逗號
         modeText = existContent[3:modeTextTailIndex]
         if modeText == "monthly":
+            #print("monthly check")
             self.periodModeIndex = 0
         elif modeText == "weekly":
+            #print("weekly check")
             self.periodModeIndex = 1
-        
+        elif modeText == "daily":
+            #print("day check")
+            self.periodModeIndex = 2
+            if re.search(r"\+00:30\*\?", existContent) != None:
+                print("30分mode")
+                self.periodModeIndex = 3
+            elif re.search("00:05?", existContent) != None:
+                print("5分mode")
+                self.periodModeIndex = 4
+        self.Layout()   # 調整排版
         print("text:",modeText)
+
+        
+        days: list[str] = re.findall(r" [a-zA-Z0-9]+ ", existContent)
+        days = [day.strip() for day in days]  # 去除頭尾括號
+        for idx in range(len(days)):
+            self.scheduleOptionDic[idx] = days[idx]
+        print("days:",days)
     
     # 新規單元頁面按鈕
     def CheckUnit(self, event):
@@ -324,43 +348,60 @@ class MyFrame(wx.Frame):
     # 時間表頁面按鈕
     def SelectPeriod(self, event, schIndex):
         #print(event.GetEventObject())
-        print(schIndex)
+        print(sys._getframe().f_code.co_name,":",schIndex)  # 印出function本身
+        self.ReadDataFile_Schedule(self.schedulConfPath)
 
         if self.periodModeIndex != schIndex:
             self.scheduleOptionDic.clear()
         
         self.periodModeIndex = schIndex
-        if schIndex == 0:
+        if schIndex == 0:   # 月
             self.scheduleOptionPanel.Show()
             for modetext in self.optionModeTextList:
                 modetext.SetLabel("日")
-            for modeCombobox in self.optionModeComboboxList:
+            for idx, modeCombobox in enumerate(self.optionModeComboboxList):
                 modeCombobox.SetItems(self.dayList)
+                if idx < len(self.scheduleOptionDic):
+                    modeCombobox.SetValue(self.scheduleOptionDic[idx])
             self.Layout()   # 調整排版
-        elif schIndex == 1:
+        elif schIndex == 1: # 周
             self.scheduleOptionPanel.Show()
             for modetext in self.optionModeTextList:
                 modetext.SetLabel("曜日")
-            for modeCombobox in self.optionModeComboboxList:
+            for idx, modeCombobox in enumerate(self.optionModeComboboxList):
                 modeCombobox.SetItems(self.weekList)
+                if idx < len(self.scheduleOptionDic):
+                    modeCombobox.SetValue(self.scheduleOptionDic[idx])
+            print(self.scheduleOptionDic)
             self.Layout()   # 調整排版
         else:
             self.scheduleOptionPanel.Hide()
             self.Layout()   # 調整排版
+        
+        # 特殊用途的模式的頁面控制 (30分, 5分)
+        # 用 hide, show 會有字幕顯示問題(破圖)不知道怎麼解決，因此先用 enable 控制效果
+        if schIndex >= 3: # 日以上(不含)
+            #self.hourMinutePanel.Hide()
+            self.hourMinutePanel.Disable()
+        else:
+            #self.hourMinutePanel.Show()
+            self.hourMinutePanel.Enable()
+        self.Layout()
+
 
     def SetTime(self, event, timeGroupNum):
         print()
     
-    def CheckSchedule(self, event):
+    def CheckAndWriteSchedule(self, event):
         print("option:",self.scheduleOptionDic, " hour:",self.scheduleHourDic, " min:",self.scheduleMinDic)
         print("mode:",self.periodModeIndex)
-        writeToFile = ""
+        timeContents = ""
         modeText = ""
         if self.periodModeIndex == 0:
             modeText = "monthly"
         elif self.periodModeIndex == 1:
             modeText = "weekly"
-        else:
+        else :
             modeText = "daily"
 
         
@@ -369,21 +410,27 @@ class MyFrame(wx.Frame):
                 if idx not in self.scheduleOptionDic.keys() or idx not in self.scheduleHourDic.keys() or  idx not in self.scheduleMinDic.keys():
                     continue
                 else:
-                    writeToFile += " " + self.scheduleOptionDic[idx] + " " + self.scheduleHourDic[idx] + ":" + self.scheduleMinDic[idx] + "," #開頭空白，結尾逗號
-        else:
+                    timeContents += " " + self.scheduleOptionDic[idx] + " " + self.scheduleHourDic[idx] + ":" + self.scheduleMinDic[idx] + "," #開頭空白，結尾逗號
+        elif self.periodModeIndex == 2: # 日
             for idx in range(4):
                 if idx not in self.scheduleHourDic.keys() or  idx not in self.scheduleMinDic.keys():
                     continue
                 else:
-                    writeToFile += " " + self.scheduleHourDic[idx] + ":" + self.scheduleMinDic[idx] + "," #開頭空白，結尾逗號
+                    timeContents += " " + self.scheduleHourDic[idx] + ":" + self.scheduleMinDic[idx] + "," #開頭空白，結尾逗號
+        elif self.periodModeIndex == 3: # 30分
+            timeContents = " 00:00,+00:30*?,"   #開頭空白，結尾逗號
+        elif self.periodModeIndex == 4: # 5分
+            timeContents = " 00:00,+00:05*?,"   #開頭空白，結尾逗號
+        else:
+            timeContents = "There is something error of schedule index."
 
         with open(self.schedulConfPath,"w") as f:
-            if writeToFile != "":
-                writeToFile = "*, " + modeText + "," + writeToFile + ",,,,,,,"
-                f.write(writeToFile)
+            if timeContents != "":
+                timeContents = "*, " + modeText + "," + timeContents + ",,,,,,,"
+                f.write(timeContents)
             wx.MessageBox("schedule.conf データ修正完了しました \n " + self.schedulConfPath)
         
-        print(writeToFile)
+        print(timeContents)
 
     
     def SelectOptionDate_1(self,event, idx):
