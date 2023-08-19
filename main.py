@@ -163,6 +163,16 @@ class MyFrame(wx.Frame):
             time1_minute = wx.ComboBox(self.hourMinutePanel, choices=minuteList, style=wx.CB_READONLY)
             time1_hour.Bind(wx.EVT_COMBOBOX, lambda event, idx=timerIndex: self.SelectHour_1(event, idx))
             time1_minute.Bind(wx.EVT_COMBOBOX, lambda event, idx=timerIndex: self.SelectMinute_1(event, idx))
+
+            # 讀取conf中的時和分數值並放到對應combobox
+            for idx in range(len(self.scheduleHourDic)):
+                if idx == timerIndex:
+                    time1_hour.SetValue(self.scheduleHourDic[idx])
+            for idx in range(len(self.scheduleMinDic)):
+                if idx == timerIndex:
+                    time1_minute.SetValue(self.scheduleMinDic[idx])
+            
+            self.Layout()   # 調整排版
             timePart.Add(time1_hour, flag=wx.ALL, border=5)
             timePart.Add(wx.StaticText(self.hourMinutePanel, label="時"), flag=wx.ALL, border=10)
             timePart.Add(time1_minute, flag=wx.ALL, border=5)
@@ -289,6 +299,7 @@ class MyFrame(wx.Frame):
 
     def ReadDataFile_Schedule(self, filePath):
         existContent = ""
+        optionDays: list[str]
         with open(filePath,"r+") as f:
             existContent = f.readline()
         modeTextTailIndex = existContent.find(",",3)    # 忽略最前面的 "*, ", 從 index 3 開始往後找逗號
@@ -296,9 +307,19 @@ class MyFrame(wx.Frame):
         if modeText == "monthly":
             #print("monthly check")
             self.periodModeIndex = 0
+            # optionDays = re.findall(r" [0-9]+ ", existContent)
+            # optionDays = [day.strip() for day in optionDays]  # 去除頭尾括號
+            # for idx in range(len(optionDays)):
+            #     self.scheduleOptionDic[idx] = optionDays[idx]
+            
         elif modeText == "weekly":
             #print("weekly check")
             self.periodModeIndex = 1
+            # optionDays = re.findall(r" [a-zA-Z]+ ", existContent)
+            # optionDays = [day.strip() for day in optionDays]  # 去除頭尾括號
+            # for idx in range(len(optionDays)):
+            #     self.scheduleOptionDic[idx] = optionDays[idx]
+            
         elif modeText == "daily":
             #print("day check")
             self.periodModeIndex = 2
@@ -311,12 +332,19 @@ class MyFrame(wx.Frame):
         self.Layout()   # 調整排版
         print("text:",modeText)
 
-        
         days: list[str] = re.findall(r" [a-zA-Z0-9]+ ", existContent)
         days = [day.strip() for day in days]  # 去除頭尾括號
         for idx in range(len(days)):
             self.scheduleOptionDic[idx] = days[idx]
         print("days:",days)
+
+        times : list[str] = re.findall(r" ([0-9]{2}):([0-9]{2})", existContent)
+        print(times)
+        for idx in range(len(times)):
+            self.scheduleHourDic[idx] = times[idx][0]
+            self.scheduleMinDic[idx] = times[idx][1]
+        #minutes : list[str] = re.findall(r":[0-9]{2},", existContent)
+        #print(minutes)
     
     # 新規單元頁面按鈕
     def CheckUnit(self, event):
@@ -486,8 +514,8 @@ class MyFrame(wx.Frame):
     # 實行按鈕功能
     def Execution(self,event):
         #os.popen("ls")
-        #os.popen(self.applicationExePath)
-        self.ReadDataFile_Schedule(self.schedulConfPath)
+        os.popen(self.applicationExePath)
+        #self.ReadDataFile_Schedule(self.schedulConfPath)   # 測試儲存效果用
         pass
 
 if __name__ == '__main__':
