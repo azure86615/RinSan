@@ -18,10 +18,19 @@ class MyFrame(wx.Frame):
         self.SetTitle('Simple menu')    #視窗標題
         self.Centre()   # 把產生出來的視窗放在螢幕正中間
         self.pageIndex = PAGE.Unit      #指示當前所在的頁面
+        
+        # test=========================================
         self.tagsConfPath = ".\\test.conf"
         self.schedulConfPath = ".\\schedule.conf"
         self.appRootConfPath = ".\\app_root.conf"
         self.applicationExePath = "%windir%\system32\SnippingTool.exe"
+        # ==============================================
+        # real++++++++++++++++++++++++++++++++++++++++++
+        # self.tagsConfPath = "C:¥conanair¥Auto¥cna_base¥CAIR_ROOT¥ tags.conf"
+        # self.schedulConfPath = "C:¥conanair¥Auto¥cna_base¥CAIR_ROOT¥ schedule.conf"
+        # self.appRootConfPath = "C:¥conanair¥Auto¥cna_base¥CAIR_ROOT¥ app_root.conf"
+        # self.applicationExePath = "C:¥conanair¥Auto¥cna_base¥cna_base.exe"
+        # ++++++++++++++++++++++++++++++++++++++++++++++
         self.scheduleOptionDic = {}
         self.scheduleHourDic = {}
         self.scheduleMinDic = {}
@@ -64,6 +73,10 @@ class MyFrame(wx.Frame):
         switchBtnSizer.Add(button_newUnit, 0,border=20)
         switchBtnSizer.Add(button_time, 0,border=20)
         switchBtnSizer.Add(button_setting, 0,border=20)
+
+        testModeCheck = wx.CheckBox(switchBtnPanel, label="test")
+        testModeCheck.Bind(wx.EVT_CHECKBOX, self.CheckTestMode)
+        switchBtnSizer.Add(testModeCheck, 0, border=20)
 
         basicbSizer.Add(switchBtnPanel)
         self.panel_main.Fit()
@@ -289,12 +302,19 @@ class MyFrame(wx.Frame):
             self.settingPanel.Show()
             self.Layout()
     
+    def CheckTestMode(self,event):
+        testmode = event.GetEventObject().GetValue()
+        print("testmode:",testmode)
+    
     # 讀取檔案
     def ReadDataFile_Tags(self, filePath)->list:
         data = []
-        with open(filePath,"r+") as f:
-            for line in f.readlines():
-                data.append(line.split("\n")[0])
+        if os.path.exists(filePath):
+            with open(filePath,"r+") as f:
+                for line in f.readlines():
+                    data.append(line.split("\n")[0])
+        else:
+            wx.MessageBox("見つからないファイル："+filePath+"\n一度アプリケーションを終了し、必要なファイルをご確認ください。")
         return data
 
     def ReadDataFile_Schedule(self, filePath):
@@ -368,10 +388,13 @@ class MyFrame(wx.Frame):
         self.RefreshTagsFile()
         
     def RefreshTagsFile(self):
-        with open(self.tagsConfPath,"w") as f:
-            for unit in self.existUnitList:
-                f.write(unit+"\n")
-        wx.MessageBox("tags.conf データ修正完了しました \n " + self.tagsConfPath)
+        if os.path.exists(self.tagsConfPath):
+            with open(self.tagsConfPath,"w") as f:
+                for unit in self.existUnitList:
+                    f.write(unit+"\n")
+            wx.MessageBox("tags.conf データ修正完了しました \n " + self.tagsConfPath)
+        else:
+            wx.MessageBox("見つからないtags confファイル：" + self.tagsConfPath)
     
     # 時間表頁面按鈕
     def SelectPeriod(self, event, schIndex):
@@ -452,11 +475,14 @@ class MyFrame(wx.Frame):
         else:
             timeContents = "There is something error of schedule index."
 
-        with open(self.schedulConfPath,"w") as f:
-            if timeContents != "":
-                timeContents = "*, " + modeText + "," + timeContents + ",,,,,,,"
-                f.write(timeContents)
-            wx.MessageBox("schedule.conf データ修正完了しました \n " + self.schedulConfPath)
+        if os.path.exists(self.schedulConfPath):
+            with open(self.schedulConfPath,"w") as f:
+                if timeContents != "":
+                    timeContents = "*, " + modeText + "," + timeContents + ",,,,,,,"
+                    f.write(timeContents)
+                wx.MessageBox("schedule.conf データ修正完了しました \n " + self.schedulConfPath)
+        else:
+            wx.MessageBox("見つからないschedule confファイル："+self.schedulConfPath)
         
         print(timeContents)
 
@@ -503,19 +529,25 @@ class MyFrame(wx.Frame):
         else:
             genWriteToFile = self.DATA_GEN
 
-        with open(self.appRootConfPath,"w") as f:
-            f.write("APP_ROOT, " + self.appRootPath.GetValue() + "\n")
-            f.write("DATA_GEN, " + str(genWriteToFile) + "\n")
-            f.write("DATA_SYNC, " + self.DATA_SYNC + "\n")
-            f.write("FILE_TYPE, " + self.FILE_TYPE + "\n")
-            f.write("SCHED30, DISABLE")
-            wx.MessageBox("app_root.conf データ修正完了しました \n " + self.appRootConfPath)
+        if os.path.exists(self.appRootConfPath):
+            with open(self.appRootConfPath,"w") as f:
+                f.write("APP_ROOT, " + self.appRootPath.GetValue() + "\n")
+                f.write("DATA_GEN, " + str(genWriteToFile) + "\n")
+                f.write("DATA_SYNC, " + self.DATA_SYNC + "\n")
+                f.write("FILE_TYPE, " + self.FILE_TYPE + "\n")
+                f.write("SCHED30, DISABLE")
+                wx.MessageBox("app_root.conf データ修正完了しました \n " + self.appRootConfPath)
+        else:
+            wx.MessageBox("見つからないroot confファイル："+self.appRootConfPath)
 
     # 實行按鈕功能
     def Execution(self,event):
-        #os.popen("ls")
-        os.popen(self.applicationExePath)
         #self.ReadDataFile_Schedule(self.schedulConfPath)   # 測試儲存效果用
+        #os.popen("ls")
+        if os.path.exists(self.applicationExePath):
+            os.popen(self.applicationExePath)
+        else:
+            wx.MessageBox("見つからないexeファイル："+self.applicationExePath)
         pass
 
 if __name__ == '__main__':
